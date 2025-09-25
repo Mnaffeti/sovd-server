@@ -1,0 +1,444 @@
+openapi: 3.0.3
+info:
+  title: SOVD Server API
+  description: Service Oriented Vehicle Diagnostics (SOVD) Server API implementation
+  version: 1.0.0
+  contact:
+    name: SOVD Server
+    email: support@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Development server
+
+paths:
+  /components:
+    get:
+      summary: Get all available components
+      description: Retrieve a list of all available vehicle components
+      operationId: getComponents
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  components:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Component'
+
+  /components/{component_id}/data:
+    get:
+      summary: Get component data items
+      description: Retrieve available data items for a specific component, optionally filtered by categories
+      operationId: getComponentData
+      parameters:
+        - name: component_id
+          in: path
+          required: true
+          description: The ID of the component
+          schema:
+            type: string
+            example: engine
+        - name: categories
+          in: query
+          required: false
+          description: Filter data items by categories (comma-separated)
+          schema:
+            type: string
+            example: identData
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DataItem'
+        '404':
+          description: Component not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /components/{component_id}/data/{data_id}:
+    get:
+      summary: Get specific data item value
+      description: Retrieve the value of a specific data item from a component
+      operationId: getDataItemValue
+      parameters:
+        - name: component_id
+          in: path
+          required: true
+          description: The ID of the component
+          schema:
+            type: string
+            example: engine
+        - name: data_id
+          in: path
+          required: true
+          description: The ID of the data item
+          schema:
+            type: string
+            example: vin
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataItemValue'
+        '404':
+          description: Component or data item not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /components/{component_id}/actuators/control:
+    post:
+      summary: Control component actuator
+      description: Control an actuator on a specific component
+      operationId: controlActuator
+      parameters:
+        - name: component_id
+          in: path
+          required: true
+          description: The ID of the component
+          schema:
+            type: string
+            example: engine
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActuatorControlRequest'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActuatorControlResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Component or actuator not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /components/{component_id}/dtcs:
+    post:
+      summary: Manage diagnostic trouble codes
+      description: Manage DTCs for a specific component (clear, read, freeze frame)
+      operationId: manageDTCs
+      parameters:
+        - name: component_id
+          in: path
+          required: true
+          description: The ID of the component
+          schema:
+            type: string
+            example: engine
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DTCManagementRequest'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DTCManagementResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /components/{component_id}/services:
+    post:
+      summary: Execute generic service request
+      description: Execute a generic service request on a component
+      operationId: executeService
+      parameters:
+        - name: component_id
+          in: path
+          required: true
+          description: The ID of the component
+          schema:
+            type: string
+            example: engine
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceRequest'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Component:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Component identifier
+          example: engine
+        name:
+          type: string
+          description: Human-readable component name
+          example: Engine Control Unit
+        description:
+          type: string
+          description: Component description
+          example: Main engine control unit
+      required:
+        - id
+        - name
+
+    DataItem:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Data item identifier
+          example: vin
+        name:
+          type: string
+          description: Human-readable data item name
+          example: Vehicle Identification Number
+        category:
+          type: string
+          description: Category of the data item
+          example: identData
+        dataType:
+          type: string
+          description: Data type of the item
+          enum: [string, number, boolean, array, object]
+          example: string
+        description:
+          type: string
+          description: Data item description
+          example: Unique vehicle identification number
+      required:
+        - id
+        - name
+        - category
+
+    DataItemValue:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Data item identifier
+          example: vin
+        name:
+          type: string
+          description: Human-readable data item name
+          example: Vehicle Identification Number
+        category:
+          type: string
+          description: Category of the data item
+          example: identData
+        data:
+          description: The actual data value
+          example: V3CT0RV3H1CL3123
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp when the data was retrieved
+        quality:
+          type: string
+          description: Data quality indicator
+          enum: [good, bad, uncertain]
+          example: good
+      required:
+        - id
+        - name
+        - category
+        - data
+
+    ActuatorControlRequest:
+      type: object
+      properties:
+        actuator_id:
+          type: string
+          description: Actuator identifier
+          example: fuel_pump
+        action:
+          type: string
+          description: Action to perform
+          enum: [start, stop, set_value]
+          example: start
+        value:
+          description: Value for set_value actions
+          example: 75.5
+        duration:
+          type: integer
+          description: Duration in seconds
+          example: 30
+      required:
+        - actuator_id
+        - action
+
+    ActuatorControlResponse:
+      type: object
+      properties:
+        actuator_id:
+          type: string
+          description: Actuator identifier
+          example: fuel_pump
+        action:
+          type: string
+          description: Action performed
+          example: start
+        status:
+          type: string
+          description: Operation status
+          enum: [success, failed, in_progress]
+          example: success
+        value:
+          description: Current value
+          example: 75.5
+        message:
+          type: string
+          description: Status message
+          example: Actuator fuel_pump started successfully
+        timestamp:
+          type: string
+          format: date-time
+          description: Operation timestamp
+
+    DTCManagementRequest:
+      type: object
+      properties:
+        action:
+          type: string
+          description: DTC management action
+          enum: [clear, read, freeze_frame]
+          example: read
+        dtcs:
+          type: array
+          items:
+            type: string
+          description: Specific DTCs to target
+          example: ["P0171", "P0300"]
+      required:
+        - action
+
+    DTCManagementResponse:
+      type: object
+      properties:
+        action:
+          type: string
+          description: Action performed
+          example: read
+        status:
+          type: string
+          description: Operation status
+          enum: [success, failed]
+          example: success
+        results:
+          type: object
+          description: Operation results
+        message:
+          type: string
+          description: Status message
+          example: DTCs retrieved successfully
+        timestamp:
+          type: string
+          format: date-time
+          description: Operation timestamp
+
+    ServiceRequest:
+      type: object
+      properties:
+        service_type:
+          type: string
+          description: Type of service to execute
+          enum: [routine, security_access, session_control, actuator_control, dtc_management]
+          example: routine
+        parameters:
+          type: object
+          description: Service parameters
+          example:
+            routine_id: "engine_compression_test"
+            timeout: 30000
+      required:
+        - service_type
+
+    ServiceResponse:
+      type: object
+      properties:
+        service_type:
+          type: string
+          description: Type of service executed
+          example: routine
+        status:
+          type: string
+          description: Service execution status
+          enum: [success, failed, in_progress]
+          example: success
+        results:
+          type: object
+          description: Service execution results
+        message:
+          type: string
+          description: Status message
+          example: Routine executed successfully
+        timestamp:
+          type: string
+          format: date-time
+          description: Execution timestamp
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+        code:
+          type: integer
+          description: Error code
+        details:
+          type: string
+          description: Additional error details
+      required:
+        - error
+        - code
