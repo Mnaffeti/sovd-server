@@ -1,44 +1,157 @@
 # SOVD Server
 
-A Service Oriented Vehicle Diagnostics (SOVD) server implementation in Go, providing HTTP/REST APIs for vehicle component diagnostics and data retrieval.
+A Service Oriented Vehicle Diagnostics (SOVD) server implementation in Go, providing HTTP/REST APIs for vehicle component diagnostics and data retrieval. **Now integrated with a Rust-based SOVD2UDS adapter for real UDS protocol communication!**
 
 ## Overview
 
-This SOVD server implements the SOVD specification with a focus on the VIN read use case. It provides mock data for multiple vehicle components and is structured to easily integrate with a UDS (Unified Diagnostic Services) library for real vehicle communication.
+This SOVD server implements the SOVD specification with a focus on vehicle diagnostics. It provides:
+- **Mock data mode** for development and testing without vehicle hardware
+- **Real UDS communication** via integrated Rust SOVD2UDS adapter
+- **Automatic fallback** from UDS to mock data when adapter unavailable
+- **RESTful API** following SOVD specification for easy integration
 
 ## Features
 
 - **RESTful API** following SOVD specification
 - **OpenAPI 3.0 specification** for API documentation
-- **Mock data** for multiple vehicle components (Engine, Transmission, ABS, Airbag, BCM)
+- **Dual-mode operation**: Real UDS communication OR mock data
+- **SOVD2UDS Adapter Integration**: Rust-based UDS protocol bridge
 - **Component discovery** - list all available vehicle components
 - **Data item discovery** - list available data items per component with category filtering
 - **Data retrieval** - get specific data item values (e.g., VIN, software version)
-- **Structured for UDS integration** - ready to integrate with C++ UDS library
+- **DTC management** - read and clear diagnostic trouble codes
+- **Actuator control** - control vehicle actuators
+- **Graceful fallback** - automatically uses mock data if UDS unavailable
 - **CORS support** for web applications
+
+## Architecture
+
+```
+┌─────────────────┐         ┌──────────────────┐         ┌─────────────────┐
+│   SOVD Client   │  HTTP   │   Go SOVD Server │  HTTP   │  Rust Adapter   │
+│  (REST API)     │ ──────> │   (Port 8080)    │ ──────> │  (Port 8081)    │
+└─────────────────┘         └──────────────────┘         └─────────────────┘
+                                      │                            │
+                                      │ Fallback                   │ FFI
+                                      ▼                            ▼
+                                 ┌─────────┐              ┌──────────────┐
+                                 │  Mock   │              │ UDS/DoIP     │
+                                 │  Data   │              │ C Libraries  │
+                                 └─────────┘              └──────────────┘
+                                                                  │
+                                                                  ▼
+                                                           ┌──────────────┐
+                                                           │ Vehicle ECUs │
+                                                           └──────────────┘
+```
 
 ## Project Structure
 
 ```
 sovd-server/
-├── main.go                     # Application entry point
-├── go.mod                      # Go module definition
-├── openapi.yaml               # OpenAPI 3.0 specification
+├── main.go                          # Application entry point with adapter integration
+├── go.mod                           # Go module definition
+├── openapi.yaml                     # OpenAPI 3.0 specification
+├── INTEGRATION.md                   # Detailed integration guide
+├── start-integrated.ps1             # PowerShell script to start both services
+├── start-integrated.bat             # Batch script to start both services
 ├── internal/
 │   ├── handlers/
-│   │   └── sovd_handler.go    # HTTP request handlers
+│   │   └── sovd_handler.go         # HTTP request handlers
 │   ├── models/
-│   │   └── models.go          # Data models and structs
+│   │   └── models.go               # Data models and structs
 │   └── services/
-│       └── sovd_service.go    # Business logic and mock data
-└── pkg/
-    └── uds/
-        └── uds_client.go      # UDS client placeholder for future integration
+│       └── sovd_service.go         # Business logic with adapter integration
+├── pkg/
+│   └── uds/
+│       └── adapter_client.go       # HTTP client for Rust adapter
+└── sovd2uds-adapter/                # Rust SOVD2UDS adapter (separate project)
+    ├── src/
+    ├── Cargo.toml
+    └── README.md
 ```
 
 ## Quick Start
 
-### Prerequisites
+### Option 1: With SOVD2UDS Adapter (Real UDS Communication)
+
+**Prerequisites:**
+- Go 1.21 or later
+- Rust 1.70 or later (for building the adapter)
+- UDS/DoIP C libraries (optional, for real vehicle communication)
+
+**Steps:**
+
+1. **Build the Rust adapter:**
+   ```powershell
+   cd sovd2uds-adapter
+   cargo build --release
+   cd ..
+   ```
+
+2. **Start both services:**
+   ```powershell
+   .\start-integrated.ps1
+   ```
+
+   This script will:
+   - Start the Rust adapter on port 8081
+   - Wait for it to be healthy
+   - Start the Go server on port 8080
+   - Handle cleanup when you press Ctrl+C
+
+3. **Verify the system is running:**
+   ```powershell
+   curl http://localhost:8080/health
+   curl http://localhost:8081/health
+   ```
+
+4. **Test UDS communication:**
+   ```powershell
+   curl http://localhost:8080/api/v1/components/ecu_engine/data/engine_speed
+   ```
+
+### Option 2: Mock Data Only (Development Mode)
+
+**Prerequisites:**
+- Go 1.21 or later
+
+**Steps:**
+
+1. **Download dependencies:**
+   ```powershell
+   go mod tidy
+   ```
+
+2. **Run the server:**
+   ```powershell
+   go run main.go
+   ```
+   
+   The server will detect that the adapter is unavailable and automatically use mock data.
+
+3. **The server will start on port 8080:**
+   ```
+   Using SOVD2UDS adapter at: http://localhost:8081
+   WARN: SOVD2UDS adapter unavailable, using mock data
+   Starting SOVD Server on :8080
+   ```
+
+### Configuration
+
+**Environment Variables:**
+- `SOVD_ADAPTER_URL` - URL of the Rust adapter (default: `http://localhost:8081`)
+- `PORT` - Server port (default: `8080`)
+- `GIN_MODE` - Gin framework mode (`release` or `debug`)
+
+**Example:**
+```powershell
+$env:SOVD_ADAPTER_URL = "http://localhost:8081"
+$env:GIN_MODE = "release"
+go run main.go
+```
+
+## Prerequisites
 
 - Go 1.21 or later
 - Git (for dependency management)

@@ -1,0 +1,61 @@
+[package]
+name = "sovd2uds-adapter"
+version = "0.1.0"
+edition = "2021"
+authors = ["SOVD Team"]
+description = "SOVD to UDS protocol adapter with FFI bindings to libudsclient and libdoipclient"
+license = "MIT"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.35", features = ["full"] }
+
+# Web framework
+axum = { version = "0.7", features = ["macros"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["trace", "cors"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Configuration
+config = "0.14"
+dotenvy = "0.15"
+
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Time handling
+chrono = { version = "0.4", features = ["serde"] }
+
+# FFI bindings
+libc = "0.2"
+
+# HTTP client for testing
+reqwest = { version = "0.11", features = ["json"], optional = true }
+
+[build-dependencies]
+bindgen = "0.69"
+cc = "1.0"
+
+[dev-dependencies]
+reqwest = { version = "0.11", features = ["json"] }
+
+[features]
+default = []
+mock-uds = [] # Feature flag to use mock UDS implementation for testing
+
+[[bin]]
+name = "sovd2uds-adapter"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

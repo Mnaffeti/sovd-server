@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 	"sovd-server/internal/handlers"
 	"sovd-server/internal/services"
 
@@ -24,8 +25,15 @@ import (
 // @BasePath /api/v1
 
 func main() {
-	// Initialize services
-	sovdService := services.NewSOVDService()
+	// Get adapter URL from environment variable, default to localhost:8081
+	adapterURL := os.Getenv("SOVD_ADAPTER_URL")
+	if adapterURL == "" {
+		adapterURL = "http://localhost:8081"
+	}
+	log.Printf("Using SOVD2UDS adapter at: %s", adapterURL)
+
+	// Initialize services with adapter URL
+	sovdService := services.NewSOVDService(adapterURL)
 
 	// Initialize handlers
 	sovdHandler := handlers.NewSOVDHandler(sovdService)
@@ -57,13 +65,13 @@ func main() {
 		v1.GET("/components", sovdHandler.GetComponents)
 		v1.GET("/components/:component_id/data", sovdHandler.GetComponentData)
 		v1.GET("/components/:component_id/data/:data_id", sovdHandler.GetDataItemValue)
-		
+
 		// Components routes - Actuator control
 		v1.POST("/components/:component_id/actuators/control", sovdHandler.ControlActuator)
-		
+
 		// Components routes - DTC management
 		v1.POST("/components/:component_id/dtcs", sovdHandler.ManageDTCs)
-		
+
 		// Components routes - Generic services
 		v1.POST("/components/:component_id/services", sovdHandler.ExecuteService)
 	}
@@ -75,21 +83,21 @@ func main() {
 			"version":     "1.0.0",
 			"description": "Service Oriented Vehicle Diagnostics (SOVD) Server API",
 			"endpoints": gin.H{
-				"health":                                "/health",
-				"components":                            "/api/v1/components",
-				"component_data":                        "/api/v1/components/{component_id}/data",
-				"component_data_with_categories":        "/api/v1/components/{component_id}/data?categories={categories}",
-				"specific_data_item":                    "/api/v1/components/{component_id}/data/{data_id}",
+				"health":                         "/health",
+				"components":                     "/api/v1/components",
+				"component_data":                 "/api/v1/components/{component_id}/data",
+				"component_data_with_categories": "/api/v1/components/{component_id}/data?categories={categories}",
+				"specific_data_item":             "/api/v1/components/{component_id}/data/{data_id}",
 			},
 			"example_requests": gin.H{
-				"get_all_components":           "GET /api/v1/components",
-				"get_engine_ident_data":        "GET /api/v1/components/engine/data?categories=identData",
-				"get_vin_from_engine":          "GET /api/v1/components/engine/data/vin",
-				"get_all_engine_data":          "GET /api/v1/components/engine/data",
-				"get_transmission_sw_version":  "GET /api/v1/components/transmission/data/swversion",
-				"control_engine_actuator":      "POST /api/v1/components/engine/actuators/control",
-				"manage_engine_dtcs":           "POST /api/v1/components/engine/dtcs",
-				"execute_diagnostic_routine":   "POST /api/v1/components/engine/services",
+				"get_all_components":          "GET /api/v1/components",
+				"get_engine_ident_data":       "GET /api/v1/components/engine/data?categories=identData",
+				"get_vin_from_engine":         "GET /api/v1/components/engine/data/vin",
+				"get_all_engine_data":         "GET /api/v1/components/engine/data",
+				"get_transmission_sw_version": "GET /api/v1/components/transmission/data/swversion",
+				"control_engine_actuator":     "POST /api/v1/components/engine/actuators/control",
+				"manage_engine_dtcs":          "POST /api/v1/components/engine/dtcs",
+				"execute_diagnostic_routine":  "POST /api/v1/components/engine/services",
 			},
 		})
 	})

@@ -2,20 +2,41 @@ package services
 
 import (
 	"fmt"
+	"log"
 	"sovd-server/internal/models"
+	"sovd-server/pkg/uds"
 	"strings"
 	"time"
 )
 
 // SOVDService provides SOVD functionality
 type SOVDService struct {
-	// In the future, this will contain UDS client connection
-	// udsClient *uds.Client
+	adapterClient *uds.AdapterClient
+	useAdapter    bool
 }
 
 // NewSOVDService creates a new SOVD service instance
-func NewSOVDService() *SOVDService {
-	return &SOVDService{}
+func NewSOVDService(adapterURL string) *SOVDService {
+	service := &SOVDService{
+		useAdapter: false,
+	}
+
+	if adapterURL != "" {
+		service.adapterClient = uds.NewAdapterClient(adapterURL)
+
+		// Check if adapter is available
+		if err := service.adapterClient.Health(); err != nil {
+			log.Printf("Warning: SOVD2UDS adapter not available at %s: %v", adapterURL, err)
+			log.Printf("Falling back to mock data mode")
+		} else {
+			service.useAdapter = true
+			log.Printf("Successfully connected to SOVD2UDS adapter at %s", adapterURL)
+		}
+	} else {
+		log.Printf("No adapter URL configured, using mock data mode")
+	}
+
+	return service
 }
 
 // GetComponents returns all available vehicle components
@@ -226,7 +247,26 @@ func (s *SOVDService) GetComponentDataItems(componentID string, categories []str
 
 // GetDataItemValue returns the value of a specific data item
 func (s *SOVDService) GetDataItemValue(componentID, dataID string) (*models.DataItemValue, error) {
-	// Mock data - in the future this will query actual values via UDS
+	// If adapter is available, use it
+	if s.useAdapter {
+		result, err := s.adapterClient.ReadDataItem(componentID, dataID)
+		if err != nil {
+			log.Printf("Error reading from adapter: %v, falling back to mock data", err)
+			// Fall through to mock data
+		} else {
+			// Convert adapter response to internal model
+			return &models.DataItemValue{
+				ID:        result.ID,
+				Name:      result.Name,
+				Category:  result.Category,
+				Data:      result.Data,
+				Timestamp: stringToTimePtr(result.Timestamp),
+				Quality:   result.Quality,
+			}, nil
+		}
+	}
+
+	// Mock data fallback - in the future this will query actual values via UDS
 	mockData := map[string]map[string]*models.DataItemValue{
 		"engine": {
 			"vin": {
@@ -286,9 +326,9 @@ func (s *SOVDService) GetDataItemValue(componentID, dataID string) (*models.Data
 				Quality:   models.QualityGood,
 			},
 			"dtc_list": {
-				ID:        "dtc_list",
-				Name:      "Diagnostic Trouble Codes",
-				Category:  "diagnosticData",
+				ID:       "dtc_list",
+				Name:     "Diagnostic Trouble Codes",
+				Category: "diagnosticData",
 				Data: []map[string]interface{}{
 					{
 						"code":        "P0171",
@@ -307,9 +347,9 @@ func (s *SOVDService) GetDataItemValue(componentID, dataID string) (*models.Data
 				Quality:   models.QualityGood,
 			},
 			"ecu_config": {
-				ID:        "ecu_config",
-				Name:      "ECU Configuration",
-				Category:  "configData",
+				ID:       "ecu_config",
+				Name:     "ECU Configuration",
+				Category: "configData",
 				Data: map[string]interface{}{
 					"max_rpm":           6500,
 					"fuel_type":         "gasoline",
@@ -427,7 +467,7 @@ func (s *SOVDService) GetDataItemValue(componentID, dataID string) (*models.Data
 // ControlActuator controls an actuator on a specific component
 func (s *SOVDService) ControlActuator(componentID string, request *models.ActuatorControlRequest) (*models.ActuatorControlResponse, error) {
 	// Mock implementation - in real scenario, this would send UDS IOControlByIdentifier service
-	
+
 	// Validate component exists
 	components, _ := s.GetComponents()
 	componentExists := false
@@ -437,7 +477,7 @@ func (s *SOVDService) ControlActuator(componentID string, request *models.Actuat
 			break
 		}
 	}
-	
+
 	if !componentExists {
 		return nil, fmt.Errorf("component '%s' not found", componentID)
 	}
@@ -501,7 +541,7 @@ func (s *SOVDService) ControlActuator(componentID string, request *models.Actuat
 // ManageDTCs manages diagnostic trouble codes for a component
 func (s *SOVDService) ManageDTCs(componentID string, request *models.DTCManagementRequest) (*models.DTCManagementResponse, error) {
 	// Mock implementation - in real scenario, this would use UDS ClearDiagnosticInformation or ReadDTCInformation services
-	
+
 	response := &models.DTCManagementResponse{
 		Action:    request.Action,
 		Status:    "success",
@@ -533,10 +573,10 @@ func (s *SOVDService) ManageDTCs(componentID string, request *models.DTCManageme
 				"status":      "active",
 				"priority":    "high",
 				"freeze_frame": map[string]interface{}{
-					"engine_rpm":     2400,
-					"vehicle_speed":  65,
-					"coolant_temp":   89,
-					"fuel_trim":      12.5,
+					"engine_rpm":    2400,
+					"vehicle_speed": 65,
+					"coolant_temp":  89,
+					"fuel_trim":     12.5,
 				},
 			},
 			{
@@ -545,10 +585,10 @@ func (s *SOVDService) ManageDTCs(componentID string, request *models.DTCManageme
 				"status":      "pending",
 				"priority":    "medium",
 				"freeze_frame": map[string]interface{}{
-					"engine_rpm":     1800,
-					"vehicle_speed":  45,
-					"coolant_temp":   87,
-					"misfire_count":  15,
+					"engine_rpm":    1800,
+					"vehicle_speed": 45,
+					"coolant_temp":  87,
+					"misfire_count": 15,
 				},
 			},
 		}
@@ -558,12 +598,12 @@ func (s *SOVDService) ManageDTCs(componentID string, request *models.DTCManageme
 		// Return freeze frame data for specific DTCs
 		response.Results["freeze_frames"] = map[string]interface{}{
 			"P0171": map[string]interface{}{
-				"timestamp":      "2024-09-25T08:15:30Z",
-				"engine_rpm":     2400,
-				"vehicle_speed":  65,
-				"coolant_temp":   89,
-				"fuel_trim":      12.5,
-				"load_pct":       45.2,
+				"timestamp":     "2024-09-25T08:15:30Z",
+				"engine_rpm":    2400,
+				"vehicle_speed": 65,
+				"coolant_temp":  89,
+				"fuel_trim":     12.5,
+				"load_pct":      45.2,
 			},
 		}
 		response.Message = "Freeze frame data retrieved successfully"
@@ -647,5 +687,17 @@ func (s *SOVDService) ExecuteService(componentID string, request *models.Service
 
 // Helper function to create time pointer
 func timePtr(t time.Time) *time.Time {
+	return &t
+}
+
+// Helper function to convert string timestamp to time pointer
+func stringToTimePtr(timestamp string) *time.Time {
+	if timestamp == "" {
+		return nil
+	}
+	t, err := time.Parse(time.RFC3339, timestamp)
+	if err != nil {
+		return nil
+	}
 	return &t
 }
