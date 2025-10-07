@@ -19,9 +19,7 @@ This SOVD server implements the SOVD specification with a focus on vehicle diagn
 - **Component discovery** - list all available vehicle components
 - **Data item discovery** - list available data items per component with category filtering
 - **Data retrieval** - get specific data item values (e.g., VIN, software version)
-- **DTC management** - read and clear diagnostic trouble codes
-- **Actuator control** - control vehicle actuators
-- **Graceful fallback** - automatically uses mock data if UDS unavailable
+- **Structured for UDS integration** - ready to integrate with C++ UDS library
 - **CORS support** for web applications
 
 ## Architecture
@@ -154,13 +152,11 @@ go run main.go
 ## Prerequisites
 
 - Go 1.21 or later
-- Git (for dependency management)
-
 ### Installation and Running
 
 1. **Clone/Navigate to the project directory:**
    ```powershell
-   cd "c:\Users\mnaffeti.ACTIA\Desktop\SOVD"
+   cd "c:\Users\XXXXX\Desktop\SOVD"
    ```
 
 2. **Download dependencies:**
@@ -282,7 +278,7 @@ curl "http://localhost:8080/api/v1/components/engine/data?categories=liveData"
 
 ## Future UDS Integration
 
-The project is structured to easily integrate with your C++ UDS library:
+The project is structured to easily integrate with your  UDS library:
 
 ### Integration Points
 
@@ -292,7 +288,7 @@ The project is structured to easily integrate with your C++ UDS library:
 
 ### Integration Steps
 
-1. **Create CGO bindings** for your C++ UDS library
+1. **Create CGO bindings** for your  UDS library
 2. **Replace mock data** in `sovd_service.go` with actual UDS requests
 3. **Update UDS client** implementation in `pkg/uds/uds_client.go`
 4. **Add error handling** for UDS communication failures
@@ -337,41 +333,14 @@ $env:GOOS="linux"; $env:GOARCH="amd64"; go build -o sovd-server main.go
 ## Testing
 
 ### Manual Testing
-Use the provided curl examples or any HTTP client (Postman, Insomnia, etc.)
+Use the provided curl examples or any HTTP client (Postman)
 
-### Automated Testing
-```powershell
-# Run tests (when implemented)
-go test ./...
-```
 
 ## Configuration
 
 The server currently runs on port 8080. To change the port, modify the `router.Run(":8080")` line in `main.go`.
 
-## Troubleshooting
 
-### Common Issues
-
-1. **Port already in use**
-   - Change the port in `main.go` or stop the conflicting service
-
-2. **Module dependencies**
-   - Run `go mod tidy` to resolve dependencies
-
-3. **CORS issues**
-   - CORS is already configured for `*` origin in development
-
-## Contributing
-
-1. Follow Go coding standards
-2. Add tests for new features
-3. Update documentation for API changes
-4. Use meaningful commit messages
-
-## License
-
-MIT License - see LICENSE file for details.
 
 ## Support
 
