@@ -1,0 +1,937 @@
+
+ #ifndef UDS_CLIENT_API_H
+ #define UDS_CLIENT_API_H
+ 
+ #include <stdint.h>
+ #include <stddef.h>
+ #include "uds_client_types.h"
+ 
+ // Define platform-specific visibility macros
+ #if defined _WIN32 || defined __CYGWIN__
+   #ifdef BUILDING_DLL
+     #ifdef __GNUC__
+       #define UDS_API __attribute__ ((dllexport))
+     #else
+       #define UDS_API __declspec(dllexport)
+     #endif
+   #else
+     #ifdef __GNUC__
+       #define UDS_API __attribute__ ((dllimport))
+     #else
+       #define UDS_API __declspec(dllimport)
+     #endif
+   #endif
+   #define DLL_LOCAL
+ #else
+   #if __GNUC__ >= 4
+     #define UDS_API __attribute__ ((visibility ("default")))
+     #define DLL_LOCAL  __attribute__ ((visibility ("hidden")))
+   #else
+     #define UDS_API
+     #define DLL_LOCAL
+   #endif
+ #endif
+ 
+ /**
+  * @struct T_stUdsClientContext
+  * @brief UDS Client Context holds all connection/session parameters and internal state.
+  *
+  * Connection/session parameters:
+  *   - std::string m_strEcuIpAddress: ECU IP address
+  *   - uint16_t m_usEcuLogicalAddress: ECU logical address
+  *   - std::string m_strEthernetInterfaceName: Ethernet interface name
+  *   - std::string m_strTesterIpAddress: Tester IP address
+  *   - std::string m_strTesterMask: Tester subnet mask
+  *   - std::string m_strTesterGateway: Tester gateway
+  *   - unsigned char m_ucIpAddressMode: IP address mode (e.g. static/dynamic)
+  *   - uint16_t  m_usTesterLogicalAddress : Tester logical address
+  *   - ... (plus internal state fields)
+  */
+ struct T_stUdsClientContext;
+ 
+ #ifdef __cplusplus
+ extern "C" {
+ #endif
+ 
+ // Opaque context handle
+ typedef struct T_stUdsClientContext T_stUdsClientContext;
+ 
+ // ==================== Context Management ====================
+ /**
+  * @brief Create a new UDS client context.
+  * @ingroup uds_client_api
+  * @return Pointer to a new opaque context, or NULL on failure.
+  */
+ UDS_API T_stUdsClientContext* uds_client_create_context(void);
+ 
+ /**
+  * @brief Destroy a UDS client context and free all resources.
+  * @ingroup uds_client_api
+  * @param ctx Pointer to the context to destroy.
+  */
+ UDS_API void uds_client_destroy_context(T_stUdsClientContext* ctx);
+ 
+ // ==================== Connection Management ====================
+ /**
+  * @brief Establish a DoIP connection to a target ECU.
+  * @ingroup uds_client_api
+  * @param ctx UDS client context.
+  * @param ecu_ip_address Target ECU IP address (string).
+  * @param ecu_logical_address Target ECU logical address.
+  * @param ethernet_interface_name Ethernet interface to use.
+  * @param tester_ip_address Tester IP address (string).
+  * @param tester_mask Tester subnet mask (string).
+  * @param tester_gateway Tester gateway (string).
+  * @param ip_address_mode IP address mode (static/dynamic).
+  * @param tester_logical_address Tester logical address
+  * @return 0 on success, negative error code on failure.
+  */
+ UDS_API int uds_client_connect(
+     T_stUdsClientContext* ctx,
+     const char* ecu_ip_address,
+     uint16_t ecu_logical_address,
+     const char* ethernet_interface_name,
+     const char* tester_ip_address,
+     const char* tester_mask,
+     const char* tester_gateway,
+     uint8_t ip_address_mode,
+     uint16_t tester_logical_address);
+ 
+ /**
+  * @brief Disconnect from the current ECU session and release resources.
+  * @ingroup uds_client_api_connection
+  * @param ctx UDS client context.
+  */
+ UDS_API void uds_client_disconnect(T_stUdsClientContext* ctx);
+ 
+ // ==================== UDS Request/Response ====================
+ /**
+  * @defgroup uds_client_api_request_response UDS Request/Response
+  * @{
+  * @brief Send UDS diagnostic requests and receive responses.
+  */
+ 
+ /**
+  * @brief Send a UDS diagnostic request and receive the response.
+  * @ingroup uds_client_api_request_response
+  * @param ctx UDS client context.
+  * @param request Pointer to request buffer.
+  * @param request_len Length of request buffer.
+  * @param response Pointer to response buffer to be filled.
+  * @param response_max_len Maximum length of response buffer.
+  * @param response_actual_len Output: actual response length.
+  * @param timeout_ms Timeout for the operation in milliseconds.
+  * @return 0 on success, negative error code on failure.
+  */
+ UDS_API int uds_client_send_request(
+     T_stUdsClientContext* ctx,
+     const uint8_t* request,
+     size_t request_len,
+     uint8_t* response,
+     size_t response_max_len,
+     size_t* response_actual_len,
+     uint32_t timeout_ms);
+ 
+ // ==================== Tester Present ====================
+/**
+ * @defgroup uds_client_api_tester_present Tester Present (SID 0x3E)
+ * @{
+ */
+
+/**
+ * @brief Send a Tester Present message to keep the diagnostic session alive.
+ * @ingroup uds_client_api_tester_present
+ * @param ctx UDS client context.
+ * @param nrc Output: Negative Response Code if the request fails.
+ * @return 0 on success, negative error code on failure.
+ */
+UDS_API int uds_client_tester_present(
+    T_stUdsClientContext* ctx,
+    uint8_t* nrc);
+
+/** @} */
+
+// ==================== ECU Reset ====================
+/**
+ * @defgroup uds_client_api_ecu_reset ECU Reset (SID 0x11)
+ * @{
+ */
+
+/**
+ * @brief Request an ECU reset.
+ * @ingroup uds_client_api_ecu_reset
+ * @param ctx UDS client context.
+ * @param reset_type Type of reset (e.g., hard reset, key off/on).
+ * @param nrc Output: Negative Response Code if the request fails.
+ * @return 0 on success, negative error code on failure.
+ */
+UDS_API int uds_client_ecu_reset(
+    T_stUdsClientContext* ctx,
+    uint8_t reset_type,
+    uint8_t* nrc);
+
+/** @} */
+
+// ==================== Clear DTC ====================
+/**
+ * @defgroup uds_client_api_clear_dtc Clear DTC Information (SID 0x14)
+ * @{
+ */
+
+/**
+ * @brief Clear Diagnostic Trouble Codes (DTCs) from the ECU.
+ * @ingroup uds_client_api_clear_dtc
+ * @param ctx UDS client context.
+ * @param group_of_dtc Group of DTCs to clear (3 bytes).
+ * @param nrc Output: Negative Response Code if the request fails.
+ * @return 0 on success, negative error code on failure.
+ */
+UDS_API int uds_client_clear_dtc(
+    T_stUdsClientContext* ctx,
+    const uint8_t* group_of_dtc,
+    uint8_t* nrc);
+
+/** @} */
+
+// ==================== Communication Control ====================
+/**
+ * @defgroup uds_client_api_communication_control Communication Control (SID 0x28)
+ * @{
+ */
+
+/**
+ * @brief Control the communication settings of the ECU.
+ * @ingroup uds_client_api_communication_control
+ * @param ctx UDS client context.
+ * @param control_type Type of control (0x01=EnableRxAndTx, 0x02=EnableRxDisableTx, 0x03=DisableRxEnableTx).
+ * @param communication_type Type of communication to control (0x01=Application, 0x02=Network, 0x03=Both).
+ * @param nrc Output: Negative Response Code if the request fails.
+ * @return 0 on success, negative error code on failure.
+ */
+UDS_API int uds_client_communication_control(
+    T_stUdsClientContext* ctx,
+    uint8_t control_type,
+    uint8_t communication_type,
+    uint8_t* nrc);
+
+/** @} */
+
+// ==================== Control DTC Setting ====================
+/**
+ * @defgroup uds_client_api_control_dtc_setting Control DTC Setting (SID 0x85)
+ * @{
+ */
+
+/**
+ * @brief Control the setting of DTCs (Diagnostic Trouble Codes) in the ECU.
+ * @ingroup uds_client_api_control_dtc_setting
+ * @param ctx UDS client context.
+ * @param setting_type Type of DTC setting (0x01=ON, 0x02=OFF).
+ * @param nrc Output: Negative Response Code if the request fails.
+ * @return 0 on success, negative error code on failure.
+ * @note This service allows enabling or disabling the setting of DTCs in the ECU.
+ *       When DTC setting is OFF, the ECU will not store any new DTCs.
+ *       This service may require specific security access level.
+ */
+UDS_API int uds_client_control_dtc_setting(
+    T_stUdsClientContext* ctx,
+    uint8_t setting_type,
+    uint8_t* nrc);
+
+/** @} */
+
+// ==================== Diagnostic Session Control ====================
+/**
+ * @defgroup uds_client_api_diagnostic_session Diagnostic Session Control (SID 0x10)
+ * @{
+ */
+
+/**
+ * @brief Control the diagnostic session type.
+ * @ingroup uds_client_api_diagnostic_session
+ * @param ctx UDS client context.
+ * @param session_type Type of diagnostic session to start.
+ * @param nrc Output: Negative Response Code if the request fails.
+ * @return 0 on success, negative error code on failure.
+ */
+UDS_API int uds_client_diagnostic_session_control(
+    T_stUdsClientContext* ctx,
+    uint8_t session_type,
+    uint8_t* nrc);
+
+/** @} */
+
+// ==================== ReadDID ====================
+/**
+ * @defgroup uds_client_api_read_did Read Data By Identifier (SID 0x22)
+ * @{
+  * @brief Read Data Identifiers (DIDs) from the ECU.
+  */
+ 
+ /**
+  * @brief Read a Data Identifier (DID) from the ECU.
+  * @ingroup uds_client_api_read_did
+  * @param ctx UDS client context.
+  * @param did Data Identifier (DID) to read.
+  * @param data Output buffer for DID data.
+  * @param data_max_len Maximum length of output buffer.
+  * @param data_actual_len Output: actual data length read.
+  * @return 0 on success, negative error code on failure.
+  */
+ UDS_API int uds_client_read_did(
+     T_stUdsClientContext* ctx,
+     uint16_t did,
+     uint8_t* nrc,
+     uint8_t* data, size_t data_max_len, size_t* data_actual_len);
+
+ /**
+  * @brief Read multiple Data Identifiers (DIDs) in a single request (SID 0x22).
+  * @ingroup uds_client_api_read_did
+  * @param ctx UDS client context.
+  * @param dids Pointer to array of 16-bit DIDs to read.
+  * @param did_count Number of DIDs in the array.
+  * @param nrc Output: Negative Response Code if the request fails.
+  * @param data Output buffer for concatenated DID data payload. For multi-DID, raw payload after 0x62 is copied.
+  * @param data_max_len Maximum length of output buffer.
+  * @param data_actual_len Output: actual data length read.
+  * @return 0 on success, negative error code on failure.
+  */
+ UDS_API int uds_client_read_dids(
+     T_stUdsClientContext* ctx,
+     const uint16_t* dids,
+     size_t did_count,
+     uint8_t* nrc,
+     uint8_t* data, size_t data_max_len, size_t* data_actual_len);
+
+/** @} */
+
+// ==================== Routine Control ====================
+/**
+ * @defgroup uds_client_api_routine_control Routine Control (SID 0x31)
+ * @{
+ */
+
+/**
+ * @brief Perform a routine control action on the ECU.
+ * @ingroup uds_client_api_routine_control
+ * @param ctx UDS client context.
+ * @param subfunction The routine control sub-function (e.g., 0x01=start, 0x02=stop, 0x03=requestResults).
+ * @param rid The Routine Identifier (RID) to control.
+ * @param params Input buffer for routine parameters.
+ * @param param_count Length of the routine parameters buffer.
+ * @param nrc Output: Negative Response Code if the request fails.
+ * @param data Output buffer for routine data.
+ * @param data_max_len Maximum length of the output buffer.
+ * @param data_actual_len Output: actual data length returned.
+ * @return 0 on success, negative error code on failure.
+ */
+UDS_API int uds_client_routine_control(
+    T_stUdsClientContext* ctx,
+    uint8_t subfunction,
+    uint16_t rid,
+    uint8_t* params,
+    size_t param_count,
+    uint8_t* nrc,
+    uint8_t* data, size_t data_max_len, size_t* data_actual_len);
+
+/** @} */
+
+// ==================== Request Download ====================
+/**
+ * @defgroup uds_client_api_request_download Request Download (SID 0x34)
+ * @{
+ */
+
+/**
+ * @brief Initiate a data download to the ECU.
+ * @ingroup uds_client_api_request_download
+ * @param ctx UDS client context.
+ * @param dataFormatIdentifier The format of the data to be downloaded.
+ * @param memoryAddress The memory address to write to.
+ * @param memoryAddressSize The size of the memory address field.
+ * @param memorySize The size of the data to be downloaded.
+ * @param memorySizeSize The size of the memory size field.
+ * @param response Output buffer for the response data (e.g., maxNumberOfBlockLength).
+ * @param responseSize Input: max size of response buffer, Output: actual size of response data.
+ * @param nrc Output: Negative Response Code if the request fails.
+ * @return 0 on success, negative error code on failure.
+ */
+UDS_API int uds_client_request_download(
+    T_stUdsClientContext* ctx,
+    uint8_t dataFormatIdentifier,
+    const uint8_t* memoryAddress,
+    size_t memoryAddressSize,
+    const uint8_t* memorySize,
+    size_t memorySizeSize,
+    uint8_t* response,
+    size_t* responseSize,
+    uint8_t* nrc);
+
+/** @} */
+
+// ==================== Request Upload ====================
+/**
+ * @defgroup uds_client_api_request_upload Request Upload (SID 0x35)
+ * @{
+ */
+
+/**
+ * @brief Initiate a data upload from the ECU.
+ * @ingroup uds_client_api_request_upload
+ * @param ctx UDS client context.
+ * @param dataFormatIdentifier The format of the data to be uploaded.
+ * @param memoryAddress The memory address to read from.
+ * @param memoryAddressSize The size of the memory address field.
+ * @param memorySize The size of the data to be uploaded.
+ * @param memorySizeSize The size of the memory size field.
+ * @param response Output buffer for the response data (e.g., maxNumberOfBlockLength).
+ * @param responseSize Input: max size of response buffer, Output: actual size of response data.
+ * @param nrc Output: Negative Response Code if the request fails.
+ * @return 0 on success, negative error code on failure.
+ */
+UDS_API int uds_client_request_upload(
+    T_stUdsClientContext* ctx,
+    uint8_t dataFormatIdentifier,
+    const uint8_t* memoryAddress,
+    size_t memoryAddressSize,
+    const uint8_t* memorySize,
+    size_t memorySizeSize,
+    uint8_t* response,
+    size_t* responseSize,
+    uint8_t* nrc);
+
+/** @} */
+
+// ==================== Security Access ====================
+/**
+ * @defgroup uds_client_api_security_access Security Access (SID 0x27)
+ * @{
+ */
+
+/**
+ * @brief Request security access to the ECU.
+ * @ingroup uds_client_api_security_access
+ * @param ctx UDS client context.
+ * @param subfunction The security access sub-function (e.g., 0x01=requestSeed, 0x02=sendKey).
+ * @param params Input buffer for security parameters (e.g., key).
+ * @param param_count Length of the security parameters buffer.
+ * @param nrc Output: Negative Response Code if the request fails.
+ * @param data Output buffer for security data (e.g., seed).
+ * @param data_max_len Maximum length of the output buffer.
+ * @param data_actual_len Output: actual data length returned.
+ * @return 0 on success, negative error code on failure.
+ */
+UDS_API int uds_client_security_access(
+    T_stUdsClientContext* ctx,
+    uint8_t subfunction,
+    uint8_t* params,
+    size_t param_count,
+    uint8_t* nrc,
+    uint8_t* data, size_t data_max_len, size_t* data_actual_len);
+
+/** @} */
+
+// ==================== Authentication ====================
+/**
+ * @defgroup uds_client_api_authentication Authentication (SID 0x29)
+ * @{
+ */
+
+/**
+ * @brief Perform authentication with the ECU.
+ * @ingroup uds_client_api_authentication
+ * @param ctx UDS client context.
+ * @param subfunction The authentication sub-function.
+ * @param params Input buffer for authentication parameters.
+ * @param param_count Length of the authentication parameters buffer.
+ * @param nrc Output: Negative Response Code if the request fails.
+ * @param data Output buffer for authentication data.
+ * @param data_max_len Maximum length of the output buffer.
+ * @param data_actual_len Output: actual data length returned.
+ * @return 0 on success, negative error code on failure.
+ */
+UDS_API int uds_client_authentication(
+    T_stUdsClientContext* ctx,
+    uint8_t subfunction,
+    uint8_t* params,
+    size_t param_count,
+    uint8_t* nrc,
+    uint8_t* data, size_t data_max_len, size_t* data_actual_len);
+
+/** @} */
+
+// ==================== Dynamically Define Data Identifier ====================
+/**
+ * @defgroup uds_client_api_dynamic_did Dynamically Define Data Identifier (SID 0x2C)
+ * @{
+ */
+
+/**
+ * @brief Dynamically define a Data Identifier (DID) in the ECU.
+ * @ingroup uds_client_api_dynamic_did
+ * @param ctx UDS client context.
+ * @param subfunction The dynamic DID sub-function (e.g., 0x01=defineByIdentifier, 0x02=defineByMemoryAddress, 0x03=clear).
+ * @param did The new DID to be defined.
+ * @param params Input buffer for dynamic DID parameters.
+ * @param param_count Length of the dynamic DID parameters buffer.
+ * @param nrc Output: Negative Response Code if the request fails.
+ * @param data Output buffer for response data.
+ * @param data_max_len Maximum length of the output buffer.
+ * @param data_actual_len Output: actual data length returned.
+ * @return 0 on success, negative error code on failure.
+ */
+UDS_API int dynamically_define_data_identifier(
+    T_stUdsClientContext* ctx,
+    uint8_t subfunction,
+    uint16_t did,
+    uint8_t* params,
+    size_t param_count,
+    uint8_t* nrc,
+    uint8_t* data, size_t data_max_len, size_t* data_actual_len);
+
+/** @} */
+
+ // ==================== ReadScalingDataByIdentifier ====================
+/**
+ * @defgroup uds_client_api_read_scaling_did Read Scaling Data By Identifier (SID 0x24)
+ * @{
+  * @brief Read Scaling Data Identifiers from the ECU.
+  */
+ 
+ /**
+  * @brief Read scaling data for a Data Identifier (DID) from the ECU.
+  * @ingroup uds_client_api_read_scaling_did
+  * @param ctx UDS client context.
+  * @param did Data Identifier (DID) to read scaling data for.
+  * @param nrc Output: Negative Response Code if the request fails.
+  * @param data Output buffer for scaling data.
+  * @param data_max_len Maximum length of output buffer.
+  * @param data_actual_len Output: actual data length read.
+  * @return 0 on success, negative error code on failure.
+  */
+ UDS_API int uds_client_read_scaling_data_by_identifier(
+     T_stUdsClientContext* ctx,
+     uint16_t did,
+     uint8_t* nrc,
+     uint8_t* data, size_t data_max_len, size_t* data_actual_len);
+
+/** @} */
+
+// ==================== Read Data By Periodic Identifier ====================
+/**
+ * @defgroup uds_client_api_read_periodic_did Read Data By Periodic Identifier (SID 0x2A)
+ * @{
+ */
+
+/**
+ * @brief Read Data By Periodic Identifier.
+ * @ingroup uds_client_api_read_periodic_did
+ * @param ctx The UDS client context.
+ * @param subFunction The sub-function for the request (e.g., 0x00 for stop, 0x01-0x03 for start).
+ * @param transmission_mode The transmission mode (e.g., send at slow rate, medium rate, fast rate).
+ * @param dids An array of Data Identifiers (DIDs) to be read periodically.
+ * @param did_count The number of DIDs in the array.
+ * @param callback The callback function to be invoked when periodic data is received.
+ * @param nrc Pointer to store the Negative Response Code (NRC) if the request fails.
+ * @return 0 on success, -1 on error.
+ */
+UDS_API int uds_read_data_by_periodic_identifier(
+    T_stUdsClientContext* ctx,
+    uint8_t transmission_mode,
+    const uint8_t* dids,
+    size_t did_count,
+    uds_periodic_cb_t callback,
+    uint8_t* nrc);
+
+ // ==================== WriteDataByIdentifier ====================
+/**
+ * @defgroup uds_client_api_write_did Write Data By Identifier (SID 0x2E)
+ * @{
+  * @brief Write Data Identifiers (DIDs) to the ECU.
+  */
+ 
+ /**
+  * @brief Write a Data Identifier (DID) to the ECU.
+  * @ingroup uds_client_api_write_did
+  * @param ctx UDS client context.
+  * @param did Data Identifier (DID) to write.
+  * @param data Pointer to the data buffer to write.
+  * @param data_len Length of the data buffer.
+  * @param nrc Output: Negative Response Code if the request fails.
+  * @return 0 on success, negative error code on failure.
+  */
+ UDS_API int uds_client_write_data_by_identifier(
+     T_stUdsClientContext* ctx,
+     uint16_t did,
+     const uint8_t* data,
+     size_t data_len,
+     uint8_t* nrc);
+
+ // ==================== Input Output Control By Identifier ====================
+/**
+ * @defgroup uds_client_api_IO_Control_By_Identifier InputOutputControlByIdentifier
+ * @{
+  * @brief Perform an IO Control by Identifier service request.
+  */
+ 
+ /**
+  * @brief Perform an IO Control by Identifier service request.
+  * @ingroup uds_client_api_services
+  * @param ctx UDS client context.
+  * @param did Data Identifier (DID) for the IO control.
+  * @param controlParameter The control parameter (e.g., returnControlToECU, resetToDefault, freezeCurrentState).
+  * @param ioControlParam Pointer to the buffer containing additional IO control parameters.
+  * @param ioControlParam_len Length of the IO control parameter buffer.
+  * @param nrc Output: Negative Response Code if the request fails.
+  * @return 0 on success, negative error code on failure.
+  */
+ UDS_API int uds_client_io_control_by_identifier(
+     T_stUdsClientContext* ctx,
+     uint16_t did,
+     uint8_t controlParameter,
+     const uint8_t* ioControlParam,
+     size_t ioControlParam_len,
+     uint8_t* nrc);
+
+ // ==================== ReadDTC ====================
+/**
+ * @defgroup uds_client_api_read_dtc ReadDTC
+ * @{
+  * @brief Read Diagnostic Trouble Codes (DTCs) from the ECU.
+  */
+ 
+ /**
+  * @struct uds_dtc_list_t
+  * @brief Structure to hold a list of Diagnostic Trouble Codes (DTCs).
+  * @ingroup uds_client_api_read_dtc
+  * @var dtc_data Flat buffer containing DTCs.
+  * @var dtc_count Number of DTCs in the buffer.
+  * @var dtc_data_len Length of the DTC data buffer.
+  */
+ typedef struct {
+     uint8_t* dtc_data;   // Flat buffer of DTCs
+     size_t   dtc_count;  // Number of DTCs
+     size_t   dtc_data_len;
+ } uds_dtc_list_t;
+ 
+ /**
+  * @brief Read Diagnostic Trouble Codes (DTCs) from the ECU.
+  * @ingroup uds_client_api_read_dtc
+  * @param ctx UDS client context.
+  * @param subfunction DTC subfunction (e.g. report type).
+  * @param out_dtcs Output: pointer to DTC list structure to fill.
+  * @return 0 on success, negative error code on failure.
+  */
+ UDS_API int uds_client_read_dtcs(
+     T_stUdsClientContext* ctx,
+     uint8_t subfunction,
+     uint8_t* params,
+     size_t param_count,
+     uint8_t* nrc,
+     uds_dtc_list_t* out_dtcs);
+ 
+ // ==================== Diagnostic Session Control ====================
+ /**
+  * @brief Open a new diagnostic session on the ECU.
+  * @ingroup uds_client_api
+  * @param ctx UDS client context.
+  * @param session_type Diagnostic session type (e.g. default, programming, extended).
+  * @return 0 on success, negative error code on failure.
+  */
+ UDS_API int uds_client_open_session(
+     T_stUdsClientContext* ctx,
+     uint8_t session_type);
+ 
+ // ==================== Communication Parameter Set ====================
+ /**
+  * @brief Set communication timing parameters for UDS requests.
+  * @ingroup uds_client_api
+  * @param ctx UDS client context.
+  * @param p2star_ms P2* (response) timeout in milliseconds.
+  * @param s3server_ms S3Server (session) timeout in milliseconds.
+  * @return 0 on success, negative error code on failure.
+  */
+ UDS_API int uds_client_set_comm_param(
+     T_stUdsClientContext* ctx,
+     uint32_t p2star_ms,
+     uint32_t s3server_ms);
+ 
+ /**
+ * @brief Writes data to a server by a local identifier.
+ * @ingroup uds_client_api
+ * @details This function sends a WriteDataByLocalIdentifier request (Service ID 0x2F) to the server.
+ *
+ * @param ctx Pointer to the UDS client context.
+ * @param lid The local identifier to write the data to.
+ * @param data Pointer to the buffer containing the data to be written.
+ * @param data_size The size of the data in the buffer.
+ * @param nrc Pointer to a variable where the Negative Response Code (NRC) will be stored if the request fails. This can be NULL if the NRC is not needed.
+ *
+ * @return 0 on success (positive response received).
+ * @return A negative error code if an error occurs (e.g., timeout, transport error).
+ */
+UDS_API int uds_client_write_data_by_local_identifier(
+    T_stUdsClientContext* ctx,
+    uint16_t lid,
+    const uint8_t* data,
+    size_t data_size,
+    uint8_t* nrc
+);
+
+/**
+ * @brief Reads a block of memory from the ECU (Service 0x23).
+ *
+ * @param ctx Pointer to the UDS client context.
+ * @param addressBytes Pointer to the buffer containing The starting memory address to read from (up to 4 bytes).
+ * @param sizeBytes Pointer to the buffer containing The number of bytes to read (up to 2 bytes).
+ * @param addressLen The length of the addressBytes (1-15).
+ * @param sizeLen The length of the sizeBytes (1-15).
+ * @param out_data Buffer to store the read data.
+ * @param out_data_size On input, the size of the out_data buffer. On output, the actual number of bytes read.
+ * @param nrc Pointer to store the Negative Response Code if applicable.
+ * @return 0 on success, or a UdsError code on failure.
+ */
+UDS_API int uds_client_read_memory_by_address(
+    T_stUdsClientContext* ctx,
+    const uint8_t* addressBytes,    
+    const uint8_t addressLen,
+    const uint8_t* sizeBytes,
+    const uint8_t sizeLen,
+    uint8_t* out_data,
+    size_t* out_data_size,
+    uint8_t* nrc
+);
+
+/**
+ * @brief Writes a block of memory to the ECU (Service 0x3D).
+ *
+ * @param ctx Pointer to the UDS client context.
+ * @param addressBytes Pointer to the buffer containing The starting memory address to read from (up to 4 bytes).
+ * @param sizeBytes Pointer to the buffer containing The number of bytes to read (up to 2 bytes).
+ * @param addressLen The length of the addressBytes (1-15).
+ * @param sizeLen The length of the sizeBytes (1-15).
+ * @param in_data Buffer containing the data to be written.
+ * @param in_data_size The number of bytes to write (up to 2 bytes).
+ * @param nrc Pointer to store the Negative Response Code if applicable.
+ * @return 0 on success, or a UdsError code on failure.
+ */
+UDS_API int uds_client_write_memory_by_address(
+    T_stUdsClientContext* ctx,
+    const uint8_t* addressBytes,
+    const uint8_t addressLen,
+    const uint8_t* sizeBytes,
+    const uint8_t sizeLen,
+    const uint8_t* in_data,
+    const uint16_t in_data_size,
+    uint8_t* nrc
+);
+
+/**
+ * @brief Accesses the ECU's communication timing parameters (Service 0x83).
+ *
+ * This function allows a client to read, set, or reset the communication timing
+ * parameters (P2 and S3) of the ECU.
+ *
+ * @param ctx Pointer to the UDS client context.
+ * @param subfunction The sub-service for the operation (e.g., 0x01 for Read, 0x02 for Set to Default).
+ * @param in_data Buffer containing the timing parameter data to send (required for some sub-services).
+ * @param in_data_size The size of the in_data buffer.
+ * @param out_data Buffer to store the read timing parameter data.
+ * @param out_data_size On input, the size of the out_data buffer. On output, the actual number of bytes read.
+ * @param nrc Pointer to store the Negative Response Code if applicable.
+ * @return 0 on success, or a UdsError code on failure.
+ */
+UDS_API int uds_client_access_timing_parameter(
+    T_stUdsClientContext* ctx,
+    uint8_t subfunction,
+    const uint8_t* in_data,
+    size_t in_data_size,
+    uint8_t* out_data,
+    size_t* out_data_size,
+    uint8_t* nrc
+);
+
+/**
+ * @brief Transfers a block of data to or from the ECU (Service 0x36).
+ *
+ * This function is used to send application or file data blocks to the ECU.
+ *
+ * @param ctx Pointer to the UDS client context.
+ * @param blockSequenceCounter The sequence number of the data block (1 byte).
+ * @param data Pointer to the buffer containing the data to be transferred.
+ * @param data_size The number of bytes in the data buffer.
+ * @param nrc Pointer to store the Negative Response Code if applicable.
+ * @return 0 on success, or a UdsError code on failure.
+ */
+UDS_API int uds_client_transfer_data(
+    T_stUdsClientContext* ctx,
+    uint8_t blockSequenceCounter,
+    const uint8_t* in_data,
+    size_t in_data_size,
+    uint8_t* out_data,
+    size_t* out_data_size,
+    uint8_t* nrc
+);
+
+/**
+ * @brief Requests the end of a data transfer (Service 0x37).
+ *
+ * This function is called to signal that all data blocks have been transferred.
+ *
+ * @param ctx Pointer to the UDS client context.
+ * @param in_data Pointer to the buffer containing transfer exit parameters (optional).
+ * @param in_data_size The size of the in_data buffer.
+ * @param out_data Pointer to the buffer to store the response data.
+ * @param out_data_size On input, the size of the out_data buffer. On output, the actual number of bytes read.
+ * @param nrc Pointer to store the Negative Response Code if applicable.
+ * @return 0 on success, or a UdsError code on failure.
+ */
+UDS_API int uds_client_request_transfer_exit(
+    T_stUdsClientContext* ctx,
+    const uint8_t* in_data,
+    size_t in_data_size,
+    uint8_t* out_data,
+    size_t* out_data_size,
+    uint8_t* nrc
+);
+
+/**
+ * @brief Requests to initiate a file transfer (Service 0x38).
+ *
+ * This service is used to prepare for a data transfer, specifying metadata
+ * about the file or application to be transferred.
+ *
+ * @param ctx Pointer to the UDS client context.
+ * @param modeOfOperation The transfer mode (e.g., 0x01 for AddFile, 0x02 for DeleteFile, 0x03 for ReplaceFile, 0x04 for ReadFile, 0x05 for ReadDirectory and 0x06 for ResumeFile).
+ * @param path The path of the file to be transferred.
+ * @param path_size The size of the path of the file to be transferred.
+ * @param encrytion_method The type of Encryption Method used for the file. Optional if 'ModeOfOperation' type is equals to DeleteFile (0x02), ReadFile (0x04) or ReadDir (0x05)
+ * @param compression_method The type of Compression method used for the file. Optional if 'ModeOfOperation' type is equals to DeleteFile (0x02), ReadFile (0x04) or ReadDir (0x05)
+ * @param filesize_parameter_size The length in bytes for both parameters fileSizeUncompressed and fileSizeCompressed. Optional if 'ModeOfOperation' type is equals to DeleteFile (0x02), ReadFile (0x04) or ReadDir (0x05)
+ * @param filesize_uncompressed The size of the uncompressed file in bytes. Optional if 'ModeOfOperation' type is equals to DeleteFile (0x02), ReadFile (0x04) or ReadDir (0x05)
+ * @param filesize_compressed The size of the compressed file in bytes. Optional if 'ModeOfOperation' type is equals to DeleteFile (0x02), ReadFile (0x04) or ReadDir (0x05)
+ * @param out_data Pointer to the buffer to store the response data.
+ * @param out_data_size On input, the size of the out_data buffer. On output, the actual number of bytes read.
+ * @param nrc Pointer to store the Negative Response Code if applicable.
+ * @return 0 on success, or a UdsError code on failure.
+ */
+UDS_API int uds_client_request_file_transfer(
+    T_stUdsClientContext* ctx,
+    uint8_t mode_of_operation,
+    const char* path,
+    size_t path_size,
+    uint8_t encrytion_method,
+    uint8_t compression_method,
+    uint8_t filesize_parameter_size,
+    const uint8_t* filesize_uncompressed,
+    const uint8_t* filesize_compressed,
+    uint8_t* out_data,
+    size_t* out_data_size,
+    uint8_t* nrc
+);
+
+/**
+ * @brief Controls the communication link behavior (Service 0x87).
+ *
+ * This service is used to control the communication link, for example, to verify transitions
+ * between communication modes or to switch baud rates.
+ *
+ * @param ctx Pointer to the UDS client context.
+ * @param sub_function The LinkControl sub-function (e.g., 0x01 for verifyModeTransitionWithFixedParameter).
+ * @param suppress_pos_rsp If non-zero, the ECU will suppress a positive response.
+ * @param link_control_record Pointer to the buffer containing the linkControlRecord data.
+ * @param record_size The size of the link_control_record buffer.
+ * @param nrc Pointer to store the Negative Response Code if applicable.
+ * @return 0 on success, or a UdsError code on failure.
+ */
+UDS_API int uds_client_link_control(
+    T_stUdsClientContext* ctx,
+    uint8_t sub_function,
+    uint8_t suppress_pos_rsp,
+    const uint8_t* link_control_record,
+    size_t record_size,
+    uint8_t* nrc
+);
+
+/**
+ * @brief Sets up an event-based response from the ECU.
+ *
+ * This function sends a ResponseOnEvent (0x86) request to the ECU to start, stop, or clear
+ * event-driven reporting.
+ *
+ * @param client_ctx Pointer to the UDS client context.
+ * @param event_type The type of event to configure (e.g.,  UDS_EVENT_TYPE_ON_DTC_STATUS_CHANGE).
+ * @param service_to_respond_to_record Optional record specifying the service to respond with.
+ * @param service_record_len Length of the service record.
+ * @param callback The callback function to be invoked when an event occurs.
+ * @param nrc Pointer to store the Negative Response Code (NRC) if the request fails.
+ * @return 0 on success, -1 on failure.
+ */
+UDS_API int uds_response_on_event(
+    T_stUdsClientContext* client_ctx,
+    uint8_t event_type,
+    uint8_t event_window_time,
+    const uint8_t* event_type_record,
+    size_t event_record_len,
+    const uint8_t* service_to_respond_to_record,
+    size_t service_record_len,
+    uds_event_cb_t callback,
+    uint8_t* nrc,
+    T_stUdsActivatedEvent* events,
+    size_t max_events,
+    size_t* actual_events);
+
+/**
+ * @brief to transmit data that is protected against attacks from third parties, which could
+ *       endanger data security, according to ISO 15764.
+ *
+ * This function is used securely exchange sensitive data between a diagnostic tester and an ECU
+ *
+ * @param ctx Pointer to the UDS client context.
+ * @param administrativeParameter Administrative parameter (2 bytes)
+ * @param signatureEncryptionCalculation Signature/Encryption/Calculation (1 byte)
+ * @param signatureLength Signature length (2 bytes)
+ * @param antiReplayCounter Anti-replay counter (2 bytes)
+ * @param internalMessageServiceRequestID Internal message/service request ID (1 byte)
+ * @param serviceSpecificParameters Pointer to service-specific parameters
+ * @param serviceSpecificParametersLength Length of service-specific parameters
+ * @param signatureMacByte Pointer to signature/MAC bytes
+ * @param signatureMacByteLength Length of signature/MAC bytes
+ * @param out_data Pointer to the buffer to store the response data.
+ * @param out_data_size On input, the size of the out_data buffer. On output, the actual number of bytes read.
+ * @param nrc Pointer to store the Negative Response Code if applicable.
+ * @return 0 on success, or a UdsError code on failure.
+ */
+UDS_API int uds_client_secured_data_transmission(
+    T_stUdsClientContext* ctx,
+    uint16_t administrativeParameter,
+    uint8_t signatureEncryptionCalculation,
+    uint16_t signatureLength,
+    uint16_t antiReplayCounter,
+    uint8_t internalMessageServiceRequestID,
+    const uint8_t* serviceSpecificParameters,
+    size_t serviceSpecificParametersLength,
+    const uint8_t* signatureMacByte,
+    size_t signatureMacByteLength,
+    uint8_t* out_data,
+    size_t* out_data_size,
+    uint8_t* nrc
+); 
+
+
+/**
+ * @brief set Log level.
+ *
+ * @param type CONSOLE|FILE|DISABLED.
+ * @param so_file_path file nme in case FILE
+ * @param level level of trace (0:TRACE , 1:INFO, 2:WARN, 3:ERROR)
+ */
+
+UDS_API void uds_client_set_logger_by_string(const char* type, const int level, const char* so_file_path);
+    
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // UDS_CLIENT_API_H
